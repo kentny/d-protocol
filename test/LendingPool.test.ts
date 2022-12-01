@@ -1,51 +1,134 @@
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { expect } from 'chai'
+import { Contract } from 'ethers'
+import { parseUnits } from 'ethers/lib/utils'
 import { ethers } from 'hardhat'
+import { LendingPool, SpyAoToken, SpyERC20 } from '../typechain-types'
 
 describe('LendingPool', () => {
-    const deployLendingPoolFixture = async () => {
+    let lendingPool: LendingPool
+    let owner: SignerWithAddress
+    let alice: SignerWithAddress
+    let bob: SignerWithAddress
+    let spyAoToken: SpyAoToken
+    let spyERC20: SpyERC20
+    let spyERC20Decimal: number
+
+    const deployLendingPoolFixture = async (): Promise<{
+        lendingPool: LendingPool
+        owner: SignerWithAddress
+        alice: SignerWithAddress
+        bob: SignerWithAddress
+    }> => {
         const LendingPool = await ethers.getContractFactory('LendingPool')
         const lendingPool = await LendingPool.deploy()
 
-        const [owner, otherAccount] = await ethers.getSigners()
+        const [owner, alice, bob] = await ethers.getSigners()
 
-        return { lendingPool, owner, otherAccount }
+        return { lendingPool, owner, alice, bob }
     }
 
-    const deployDummyContract = async () => {
+    const deployDummyContract = async (): Promise<Contract> => {
         const DummyContract = await ethers.getContractFactory('DummyContract')
         const dummyContract = await DummyContract.deploy()
 
         return dummyContract
     }
 
+    const deploySpyAoToken = async (): Promise<SpyAoToken> => {
+        const SpyAoToken = await ethers.getContractFactory('SpyAoToken')
+        const spyAoToken = await SpyAoToken.deploy()
+
+        return spyAoToken
+    }
+
+    const deploySpyERC20 = async (): Promise<SpyERC20> => {
+        const SpyERC20 = await ethers.getContractFactory('SpyERC20')
+        const spyERC20 = await SpyERC20.deploy()
+
+        return spyERC20
+    }
+
+    const setupReserve = async (
+        lendingPool: Contract,
+        isOverCol: boolean,
+        asset?: Contract,
+        aoToken?: Contract,
+        debtToken?: Contract,
+        interestRateProvider?: Contract
+    ) => {
+        const _asset = asset !== undefined ? asset : await deployDummyContract()
+        const _aoToken = aoToken !== undefined ? aoToken : await deployDummyContract()
+        const _debtToken = debtToken !== undefined ? debtToken : await deployDummyContract()
+        const _interestRateProvider =
+            interestRateProvider !== undefined ? interestRateProvider : await deployDummyContract()
+
+        await lendingPool.setupReserve(
+            _asset.address,
+            _aoToken.address,
+            _debtToken.address,
+            _interestRateProvider.address,
+            isOverCol
+        )
+
+        return {
+            isOverCol,
+            _asset,
+            _aoToken,
+            _debtToken,
+            _interestRateProvider
+        }
+    }
+
+    beforeEach(async () => {
+        const fixture = await deployLendingPoolFixture()
+        lendingPool = fixture.lendingPool
+        owner = fixture.owner
+        alice = fixture.alice
+        bob = fixture.bob
+
+        spyAoToken = await deploySpyAoToken()
+        spyERC20 = await deploySpyERC20()
+
+        spyERC20Decimal = await spyERC20.decimals()
+
+        await spyERC20.mint(alice.address, parseUnits('1000', spyERC20Decimal))
+        await spyERC20.mint(bob.address, parseUnits('1000', spyERC20Decimal))
+
+        await spyERC20.connect(alice).approve(lendingPool.address, parseUnits('1000', spyERC20Decimal))
+        await spyERC20.connect(bob).approve(lendingPool.address, parseUnits('1000', spyERC20Decimal))
+    })
+
     describe('setupReserve', () => {
-        it('Should create a new reserve!!!', async () => {
-            const { lendingPool } = await deployLendingPoolFixture()
-            const dummyAsset = (await deployDummyContract()).address
-            const dummyAoToken = (await deployDummyContract()).address
-            const dummyDebtToken = (await deployDummyContract()).address
-            const dummyInterestRateProvider = (await deployDummyContract()).address
+        it('should create a new reserve', async () => {
+            const {
+                isOverCol,
+                _asset: asset,
+                _aoToken: aoToken,
+                _debtToken: debtToken,
+                _interestRateProvider: interestRateProvider
+            } = await setupReserve(lendingPool, true)
 
-            await lendingPool.setupReserve(dummyAsset, dummyAoToken, dummyDebtToken, dummyInterestRateProvider)
-
-            const reserveData = await lendingPool.getReserveData(dummyAsset)
-            expect(reserveData.aoToken).to.equal(dummyAoToken)
-            expect(reserveData.debtToken).to.equal(dummyDebtToken)
-            expect(reserveData.interestRateProvider).to.equal(dummyInterestRateProvider)
+            const reserveData = await lendingPool.getReserveData(asset.address)
+            expect(reserveData.aoToken).to.equal(aoToken.address)
+            expect(reserveData.debtToken).to.equal(debtToken.address)
+            expect(reserveData.interestRateProvider).to.equal(interestRateProvider.address)
+            expect(reserveData.isOverCol).to.equal(isOverCol)
         })
 
         describe('Security', () => {
-            it('Should revert if `asset` is not a contract address', async () => {
-                const { lendingPool, otherAccount } = await deployLendingPoolFixture()
+            it('should revert if `asset` is not a contract address', async () => {
+                const { lendingPool, alice } = await deployLendingPoolFixture()
                 const dummyContract = await deployDummyContract()
                 const dummyContractAddress = dummyContract.address
 
                 await expect(
                     lendingPool.setupReserve(
-                        otherAccount.address,
+                        alice.address,
                         dummyContractAddress,
                         dummyContractAddress,
-                        dummyContractAddress
+                        dummyContractAddress,
+                        true
                     )
                 ).to.be.revertedWith('Not Contract')
             })
@@ -53,11 +136,31 @@ describe('LendingPool', () => {
     })
 
     describe('deposit', () => {
-        it('Should allow external access', async () => {
-            const { lendingPool } = await deployLendingPoolFixture()
-
-            await expect(lendingPool.deposit()).to.not.be.reverted
+        it('should revert if asset is not registered in reserves', async () => {
+            await expect(lendingPool.deposit(spyERC20.address, 1000)).to.be.revertedWith('Not Registered Asset')
         })
+
+        it('should revert if asset does not complient ERC20', async () => {
+            const dummyContract = await deployDummyContract()
+            await setupReserve(lendingPool, true, dummyContract, spyAoToken)
+
+            await expect(lendingPool.connect(alice).deposit(dummyContract.address, 1000)).to.be.reverted
+        })
+
+        it('should increase the reserve balance by the amount of deposited asset', async () => {
+            await setupReserve(lendingPool, true, spyERC20, spyAoToken)
+
+            const amount = parseUnits('30', spyERC20Decimal)
+
+            await expect(lendingPool.connect(alice).deposit(spyERC20.address, amount)).to.changeTokenBalances(
+                spyERC20,
+                [alice, spyAoToken],
+                [amount.mul(-1), amount]
+            )
+        })
+
+        // it('should issue the same amount of AoToken with the deposited asset', () => {
+        // })
 
         describe('Security', () => {
             // TODO
@@ -65,9 +168,7 @@ describe('LendingPool', () => {
     })
 
     describe('withdraw', async () => {
-        it('Should allow external access', async () => {
-            const { lendingPool } = await deployLendingPoolFixture()
-
+        it('should allow external access', async () => {
             await expect(lendingPool.withdraw()).to.not.be.reverted
         })
 
