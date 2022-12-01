@@ -21,7 +21,7 @@ contract LendingPool {
 
     function setupReserve(
         address asset,
-        IAoToken aoToken,                // TODO: Should restrict with the AoToken interface.
+        IAoToken aoToken,
         address debtToken,              // TODO: Should restrict with the DebtToken interface.
         address interestRateProvider,   // TODO: Should restrict with the IInterestRateProvider interface.
         bool isOverCol
@@ -43,7 +43,6 @@ contract LendingPool {
         address asset,
         uint256 amount
     ) external {
-        // IERC20(asset).safeTransferFrom(msg.sender, aToken, amount);
         require(_isValidAsset(asset), ErrorType.NOT_REGISTERED_ASSET);
 
         ReserveType.Data memory reserve = _reserves[asset];

@@ -4,6 +4,9 @@ import { Contract } from 'ethers'
 import { parseUnits } from 'ethers/lib/utils'
 import { ethers } from 'hardhat'
 import { LendingPool, SpyAoToken, SpyERC20 } from '../typechain-types'
+import { deployDummyContract } from './misc/DummyContract'
+import { deploySpyAoToken } from './tokenization/SpyAoToken'
+import { deploySpyERC20 } from './tokenization/SpyERC20'
 
 describe('LendingPool', () => {
     let lendingPool: LendingPool
@@ -26,27 +29,6 @@ describe('LendingPool', () => {
         const [owner, alice, bob] = await ethers.getSigners()
 
         return { lendingPool, owner, alice, bob }
-    }
-
-    const deployDummyContract = async (): Promise<Contract> => {
-        const DummyContract = await ethers.getContractFactory('DummyContract')
-        const dummyContract = await DummyContract.deploy()
-
-        return dummyContract
-    }
-
-    const deploySpyAoToken = async (): Promise<SpyAoToken> => {
-        const SpyAoToken = await ethers.getContractFactory('SpyAoToken')
-        const spyAoToken = await SpyAoToken.deploy()
-
-        return spyAoToken
-    }
-
-    const deploySpyERC20 = async (): Promise<SpyERC20> => {
-        const SpyERC20 = await ethers.getContractFactory('SpyERC20')
-        const spyERC20 = await SpyERC20.deploy()
-
-        return spyERC20
     }
 
     const setupReserve = async (
