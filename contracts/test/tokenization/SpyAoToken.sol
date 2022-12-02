@@ -4,8 +4,11 @@ pragma solidity ^0.8.9;
 import {IAoToken} from "../../tokenization/IAoToken.sol";
 
 contract SpyAoToken is IAoToken {
-    constructor() {
-        
+    mapping(address => uint256) private _balance;
+
+    function mint(address to, uint256 amount) external returns (bool) {
+        _balance[to] = amount;
+        return true;
     }
 
     function totalSupply() external view returns (uint256) {
@@ -17,8 +20,7 @@ contract SpyAoToken is IAoToken {
      * @dev Returns the amount of tokens owned by `account`.
      */
     function balanceOf(address account) external view returns (uint256) {
-        // TODO
-        return 0;
+        return _balance[account];
     }
 
     /**

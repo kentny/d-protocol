@@ -47,6 +47,8 @@ contract LendingPool {
 
         ReserveType.Data memory reserve = _reserves[asset];
         IERC20(asset).safeTransferFrom(msg.sender, address(reserve.aoToken), amount);
+
+        reserve.aoToken.mint(msg.sender, amount);
     }
 
     function withdraw() external {

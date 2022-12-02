@@ -141,8 +141,18 @@ describe('LendingPool', () => {
             )
         })
 
-        // it('should issue the same amount of AoToken with the deposited asset', () => {
-        // })
+        it('should mint the same amount of AoToken to the depositer with the deposited asset', async () => {
+            await setupReserve(lendingPool, true, spyERC20, spyAoToken)
+
+            const amount = parseUnits('30', spyERC20Decimal)
+            await lendingPool.connect(alice).deposit(spyERC20.address, amount)
+
+            expect(await spyAoToken.balanceOf(alice.address)).to.be.equal(amount)
+        })
+
+        it('should emit Deposit event', () => {})
+
+        it('should emit Mint event', () => {})
 
         describe('Security', () => {
             // TODO
